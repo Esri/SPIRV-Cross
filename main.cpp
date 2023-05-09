@@ -708,6 +708,7 @@ struct CLIArguments
 	SmallVector<BuiltIn> masked_stage_builtins;
 	string entry;
 	string entry_stage;
+	string msl_binding_output;
 
 	struct Rename
 	{
@@ -1542,9 +1543,8 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		auto compilerMSL = static_cast<CompilerMSL *>(compiler.get());
 		auto resources = compilerMSL->get_shader_resources();
 
-		std::string msl_binding_map_json_file_name(args.input);
-		msl_binding_map_json_file_name += ".json";
-		std::ofstream msl_binding_map(msl_binding_map_json_file_name);
+		std::string msl_binding_map_output_file_name(args.msl_binding_output);
+		std::ofstream msl_binding_map(msl_binding_map_output_file_name);
 
 		msl_binding_map << "{" << std::endl;
 		msl_binding_map << "  \"textures\": [" << std::endl;
@@ -1625,10 +1625,10 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 				msl_binding_map << ",";
 			}
 			msl_binding_map << std::endl;
+			i++;
 		}
 		msl_binding_map << "  ]" << std::endl;
 		msl_binding_map << "}" << std::endl;
-		i++;
 	}
 
 	if (args.dump_resources)
@@ -1880,6 +1880,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-combined-sampler-suffix", [&args](CLIParser &parser) {
 		args.msl_combined_sampler_suffix = parser.next_string();
 	});
+	cbs.add("--msl-binding-output",
+	        [&args](CLIParser &parser) { args.msl_binding_output = parser.next_string(); });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
