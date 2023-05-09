@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -1535,6 +1536,100 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	}
 
 	auto ret = compiler->compile();
+
+	if (args.msl)
+	{
+		auto compilerMSL = static_cast<CompilerMSL *>(compiler.get());
+		auto resources = compilerMSL->get_shader_resources();
+
+		std::string msl_binding_map_json_file_name(args.input);
+		msl_binding_map_json_file_name += ".json";
+		std::ofstream msl_binding_map(msl_binding_map_json_file_name);
+
+		msl_binding_map << "{" << std::endl;
+		msl_binding_map << "  \"textures\": [" << std::endl;
+
+		size_t size = resources.sampled_images.size();
+		size_t i = 0;
+		for (auto &sampler_image : resources.sampled_images)
+		{
+			uint32_t msl_binding = compilerMSL->get_automatic_msl_resource_binding(sampler_image.id);
+			uint32_t binding = compilerMSL->get_decoration(sampler_image.id, spv::DecorationBinding);
+			msl_binding_map << "    {" << std::endl;
+			msl_binding_map << "    \"binding\":" << binding << "," << std::endl;
+			msl_binding_map << "    \"msl_binding\":" << msl_binding << std::endl;
+			msl_binding_map << "    }";
+			if (i < (size - 1))
+			{
+				msl_binding_map << ",";
+			}
+			msl_binding_map << std::endl;
+			i++;
+		}
+
+		msl_binding_map << "  ]," << std::endl;
+		msl_binding_map << "  \"images\": [" << std::endl;
+
+		size = resources.storage_images.size();
+		i = 0;
+		for (auto &storage_image : resources.storage_images)
+		{
+			uint32_t msl_binding = compilerMSL->get_automatic_msl_resource_binding(storage_image.id);
+			uint32_t binding = compilerMSL->get_decoration(storage_image.id, spv::DecorationBinding);
+			msl_binding_map << "    {" << std::endl;
+			msl_binding_map << "    \"binding\":" << binding << "," << std::endl;
+			msl_binding_map << "    \"msl_binding\":" << msl_binding << std::endl;
+			msl_binding_map << "    }";
+			if (i < (size - 1))
+			{
+				msl_binding_map << ",";
+			}
+			msl_binding_map << std::endl;
+			i++;
+		}
+
+		msl_binding_map << "  ]," << std::endl;
+		msl_binding_map << "  \"ubos\": [" << std::endl;
+		size = resources.uniform_buffers.size();
+		i = 0;
+		for (auto &uniform_buffer : resources.uniform_buffers)
+		{
+			uint32_t msl_binding = compilerMSL->get_automatic_msl_resource_binding(uniform_buffer.id);
+			uint32_t binding = compilerMSL->get_decoration(uniform_buffer.id, spv::DecorationBinding);
+			msl_binding_map << "    {" << std::endl;
+			msl_binding_map << "    \"binding\":" << binding << "," << std::endl;
+			msl_binding_map << "    \"msl_binding\":" << msl_binding << std::endl;
+			msl_binding_map << "    }";
+			if (i < (size - 1))
+			{
+				msl_binding_map << ",";
+			}
+			msl_binding_map << std::endl;
+			i++;
+		}
+
+		msl_binding_map << "  ]," << std::endl;
+		msl_binding_map << "  \"ssbos\": [" << std::endl;
+		size = resources.storage_buffers.size();
+		i = 0;
+		for (auto &storage_buffer : resources.storage_buffers)
+		{
+			uint32_t msl_binding = compilerMSL->get_automatic_msl_resource_binding(storage_buffer.id);
+			uint32_t binding = compilerMSL->get_decoration(storage_buffer.id, spv::DecorationBinding);
+			msl_binding_map << "    {" << std::endl;
+			msl_binding_map << "    \"binding\":" << binding << "," << std::endl;
+			msl_binding_map << "    \"msl_binding\":" << msl_binding << std::endl;
+			msl_binding_map << "    }";
+			if (i < (size - 1))
+			{
+				msl_binding_map << ",";
+			}
+			msl_binding_map << std::endl;
+		}
+		msl_binding_map << "  ]" << std::endl;
+		msl_binding_map << "}" << std::endl;
+		i++;
+	}
 
 	if (args.dump_resources)
 	{
