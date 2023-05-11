@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -707,6 +708,7 @@ struct CLIArguments
 	SmallVector<BuiltIn> masked_stage_builtins;
 	string entry;
 	string entry_stage;
+	string msl_binding_output;
 
 	struct Rename
 	{
@@ -1536,6 +1538,57 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 
 	auto ret = compiler->compile();
 
+	if (args.msl)
+	{
+		auto compilerMSL = static_cast<CompilerMSL *>(compiler.get());
+		auto resources = compilerMSL->get_shader_resources();
+
+		std::string msl_binding_map_output_file_name(args.msl_binding_output);
+		std::ofstream msl_binding_map(msl_binding_map_output_file_name);
+
+		auto output_msl_bindings_as_json = [&compilerMSL, &msl_binding_map](const SmallVector<Resource> &resources)
+		{
+			size_t size = resources.size();
+			size_t i = 0;
+			for (auto &resource : resources)
+			{
+				int32_t msl_binding = compilerMSL->get_automatic_msl_resource_binding(resource.id);
+				int32_t binding = compilerMSL->get_decoration(resource.id, spv::DecorationBinding);
+				msl_binding_map << "    {" << std::endl;
+				msl_binding_map << "    \"binding\":" << binding << "," << std::endl;
+				msl_binding_map << "    \"msl_binding\":" << msl_binding << std::endl;
+				msl_binding_map << "    }";
+				if (i < (size - 1))
+				{
+					msl_binding_map << ",";
+				}
+				msl_binding_map << std::endl;
+				i++;
+			}
+		};
+		msl_binding_map << "{" << std::endl;
+
+		msl_binding_map << "  \"textures\": [" << std::endl;
+		output_msl_bindings_as_json(resources.sampled_images);
+		msl_binding_map << "  ]," << std::endl;
+
+
+		msl_binding_map << "  \"images\": [" << std::endl;
+		output_msl_bindings_as_json(resources.storage_images);
+		msl_binding_map << "  ]," << std::endl;
+
+		msl_binding_map << "  \"ubos\": [" << std::endl;
+		output_msl_bindings_as_json(resources.uniform_buffers);
+		msl_binding_map << "  ]," << std::endl;
+
+
+		msl_binding_map << "  \"ssbos\": [" << std::endl;
+		output_msl_bindings_as_json(resources.storage_buffers);
+		msl_binding_map << "  ]" << std::endl;
+
+		msl_binding_map << "}" << std::endl;
+	}
+
 	if (args.dump_resources)
 	{
 		compiler->update_active_builtins();
@@ -1785,6 +1838,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-combined-sampler-suffix", [&args](CLIParser &parser) {
 		args.msl_combined_sampler_suffix = parser.next_string();
 	});
+	cbs.add("--msl-binding-output",
+	        [&args](CLIParser &parser) { args.msl_binding_output = parser.next_string(); });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
