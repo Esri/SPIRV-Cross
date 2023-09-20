@@ -1545,18 +1545,31 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 
 		std::string msl_binding_map_output_file_name(args.msl_binding_output);
 		std::ofstream msl_binding_map(msl_binding_map_output_file_name);
-
-		auto output_msl_bindings_as_json = [&compilerMSL, &msl_binding_map](const SmallVector<Resource> &resources)
+		
+		auto output_msl_bindings_as_json = [&compilerMSL, &msl_binding_map](const SmallVector<Resource> &resources, bool output_binding_secondary = false)
 		{
 			size_t size = resources.size();
 			size_t i = 0;
 			for (auto &resource : resources)
 			{
 				int32_t msl_binding = compilerMSL->get_automatic_msl_resource_binding(resource.id);
+
 				int32_t binding = compilerMSL->get_decoration(resource.id, spv::DecorationBinding);
 				msl_binding_map << "    {" << std::endl;
 				msl_binding_map << "    \"binding\":" << binding << "," << std::endl;
-				msl_binding_map << "    \"msl_binding\":" << msl_binding << std::endl;
+
+				if (output_binding_secondary)
+				{
+					int32_t msl_binding_secondary =
+					    compilerMSL->get_automatic_msl_resource_binding_secondary(resource.id);
+					msl_binding_map << "    \"msl_binding\":" << msl_binding << "," << std::endl;
+					msl_binding_map << "    \"msl_binding_secondary\":" << msl_binding_secondary << std::endl;
+				}
+				else
+				{
+					msl_binding_map << "    \"msl_binding\":" << msl_binding << std::endl;
+				}
+
 				msl_binding_map << "    }";
 				if (i < (size - 1))
 				{
@@ -1569,7 +1582,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_binding_map << "{" << std::endl;
 
 		msl_binding_map << "  \"textures\": [" << std::endl;
-		output_msl_bindings_as_json(resources.sampled_images);
+		output_msl_bindings_as_json(resources.sampled_images, true);
 		msl_binding_map << "  ]," << std::endl;
 
 
