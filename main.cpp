@@ -731,6 +731,8 @@ struct CLIArguments
 	uint32_t hlsl_base_vertex_index_register_space = 0;
 
 	bool hlsl_force_storage_buffer_as_uav = false;
+	uint32_t hlsl_shift_readonly_ssbo_binding = 0;
+	uint32_t hlsl_shift_writable_ssbo_binding = 0;
 	bool hlsl_nonwritable_uav_texture_as_srv = false;
 	bool hlsl_enable_16bit_types = false;
 	bool hlsl_flatten_matrix_vertex_input_semantics = false;
@@ -831,6 +833,8 @@ static void print_help_hlsl()
 	                "\t\tDo not emit any : register(#) bindings for specific resource types, and rely on HLSL compiler to assign something.\n"
 	                "\t[--hlsl-force-storage-buffer-as-uav]:\n\t\tAlways emit SSBOs as UAVs, even when marked as read-only.\n"
 	                "\t\tNormally, SSBOs marked with NonWritable will be emitted as SRVs.\n"
+                  "\t[--hlsl-shift-readonly-ssbo-binding <shift>]:\n\t\tAdds <shift> to the HLSL register number (t#) for read-only SSBOs.\n"
+									"\t[--hlsl-shift-writable-ssbo-binding <shift>]:\n\t\tAdds <shift> to the HLSL register number (u#) for writable SSBOs.\n"
 	                "\t[--hlsl-nonwritable-uav-texture-as-srv]:\n\t\tEmit NonWritable storage images as SRV textures instead of UAV.\n"
 	                "\t\tUsing this option messes with the type system. SPIRV-Cross cannot guarantee that this will work.\n"
 	                "\t\tOne major problem area with this feature is function arguments, where we won't know if we're seeing a UAV or SRV.\n"
@@ -1512,6 +1516,40 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	{
 		auto *hlsl_compiler = static_cast<CompilerHLSL *>(compiler.get());
 		hlsl_compiler->remap_num_workgroups_builtin();
+
+		if (args.hlsl_shift_readonly_ssbo_binding != 0 && !args.hlsl_force_storage_buffer_as_uav)
+		{
+			for (auto &ssbo : res.storage_buffers)
+			{
+				Bitset flags = compiler->get_buffer_block_flags(ssbo.id);
+				if (!flags.get(DecorationNonWritable))
+					continue;
+
+				uint32_t binding = 0;
+				if (compiler->has_decoration(ssbo.id, DecorationBinding))
+					binding = compiler->get_decoration(ssbo.id, DecorationBinding);
+
+				compiler->set_decoration(ssbo.id, DecorationBinding,
+																 binding + args.hlsl_shift_readonly_ssbo_binding);
+			}
+		}
+
+		if (args.hlsl_shift_writable_ssbo_binding != 0)
+		{
+			for (auto &ssbo : res.storage_buffers)
+			{
+				Bitset flags = compiler->get_buffer_block_flags(ssbo.id);
+				if (flags.get(DecorationNonWritable))
+					continue;
+
+				uint32_t binding = 0;
+				if (compiler->has_decoration(ssbo.id, DecorationBinding))
+					binding = compiler->get_decoration(ssbo.id, DecorationBinding);
+
+				compiler->set_decoration(ssbo.id, DecorationBinding,
+																 binding + args.hlsl_shift_writable_ssbo_binding);
+			}
+		}
 	}
 
 	if (args.hlsl)
@@ -1683,6 +1721,10 @@ static int main_inner(int argc, char *argv[])
 	});
 	cbs.add("--hlsl-force-storage-buffer-as-uav",
 	        [&args](CLIParser &) { args.hlsl_force_storage_buffer_as_uav = true; });
+	cbs.add("--hlsl-shift-readonly-ssbo-binding",
+	        [&args](CLIParser &parser) { args.hlsl_shift_readonly_ssbo_binding = parser.next_uint(); });
+	cbs.add("--hlsl-shift-writable-ssbo-binding",
+	        [&args](CLIParser &parser) { args.hlsl_shift_writable_ssbo_binding = parser.next_uint(); });
 	cbs.add("--hlsl-nonwritable-uav-texture-as-srv",
 	        [&args](CLIParser &) { args.hlsl_nonwritable_uav_texture_as_srv = true; });
 	cbs.add("--hlsl-enable-16bit-types", [&args](CLIParser &) { args.hlsl_enable_16bit_types = true; });
