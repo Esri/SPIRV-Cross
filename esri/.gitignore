@@ -1,4 +1,4 @@
 build
 build_*
 install
-opencv-*.zip
+spirv-cross-*.zip
